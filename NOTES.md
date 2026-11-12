@@ -24,21 +24,24 @@ Trích/tóm tắt câu trả lời baseline và điểm:
 
 ## 2. Bằng chứng trong trace và nguyên nhân
 
-Lần eval_after gần nhất: 78.41/100, 22/22 scored.
-- H1 tăng 60 lên 100: đã đọc incident liên kết, điều tra đủ nhiều bước.
+Lần eval_after cuối sau sửa timestamp: 82.50/100, 22/22 scored, 0 unscored.
+- H1 tăng 60 lên 75: đã đọc incident liên kết, nhưng vẫn cần trình bày chính xác
+  khoảng thời gian ảnh hưởng và phân biệt nguyên nhân với mô tả ảnh hưởng.
 - H2 đạt 100: đã phân biệt status hiện tại với incident lịch sử.
-- H6 tăng 60 lên 80: đã đọc incident liên kết, thay vì chỉ nhắc URL.
+- H6 tăng 60 lên 70: đã đọc incident liên kết, nêu nguyên nhân cấu hình và chậm
+  workflow tới 25 phút; vẫn cần diễn đạt đầy đủ giới hạn dữ liệu bị cắt.
 - A5 tăng 40 lên 70: nêu giới hạn lịch sử, nhưng cách diễn đạt vẫn cần thận trọng.
-- H5 đạt 0 do max_steps. Answer đã có ngày 2026-11-09T03:50:47.065020+00:00,
+- H5 từng đạt 0 do max_steps ở lần 78.41. Answer đã có ngày 2026-11-09T03:50:47.065020+00:00,
   nhưng validator chỉ nhận chữ “snapshot/captured_at/chụp”. Từ step 2 đến 8
   đều yêu cầu bổ sung snapshot, dù timestamp đã có. Đây là lỗi code, không phải
   agent không lấy được status. Bản sửa cuối chấp nhận ngày captured_at trong answer.
+  Lần cuối H5 đạt 75, status completed, không còn mắc vòng validation timestamp.
 - H7 đạt 55: answer đã giữ GitHub operational và báo Cloudflare không thể xác minh
   do timeout. Nhận xét judge yêu cầu khác không khớp hoàn toàn với expected/answer;
   không làm theo user để bịa operational nhằm tăng điểm.
-- H8 đạt 50: answer đã nói không thể cung cấp đủ lịch sử 2020–2026 và giới hạn
-  50 incident/5 kết quả. Nhận xét judge về thiếu giới hạn chưa khớp answer.
-- E1 đạt 55: cần phân biệt snapshot với live và không coi updated_at là thời điểm
+- H8 đạt 75: answer nói không thể cung cấp đủ lịch sử 2020–2026, giới hạn
+  50 incident/5 kết quả và không tìm thấy không chứng minh không có sự cố.
+- E1 đạt 65: cần phân biệt snapshot với live và không coi updated_at là thời điểm
   khắc phục. Không suy ra chất lượng chỉ từ điểm judge.
 
 Hai lỗi trước đó được xác minh và sửa: INCIDENT_NOT_FOUND của một details call
@@ -67,34 +70,34 @@ từng xóa kết quả GitHub khỏi answer (H7).
 Đã kiểm tra offline ngoài sandbox. Thêm regression tests cho incident không tìm
 thấy không phủ định status, bảo toàn provider thành công, timestamp không có từ
 snapshot, URL feedback, JSON không phải object, lịch sử giới hạn, theo liên kết
-và timeout dưới tiêu đề. Kết quả test cuối được báo trong tin nhắn bàn giao.
+và timeout dưới tiêu đề. Bộ test cuối: 45 tests, tất cả OK.
 
 ## 4. So sánh hai lần chạy
 
 | Chỉ số | eval_before.json | eval_after.json |
 |---|---:|---:|
 | Đã chấm | 22/22 | 22/22 |
-| Điểm tổng | 78.64 | 78.41 |
+| Điểm tổng | 78.64 | 82.50 |
 | A5 | 40 | 70 |
-| H1 | 60 | 100 |
-| H6 | 60 | 80 |
+| H1 | 60 | 75 |
+| H6 | 60 | 70 |
 | H7 | 50 | 55 |
-| H5 | 65 | 0 |
-| Model calls agent có usage | 56 | 68 |
-| Token agent | 61,213 | 124,177 |
-| Token judge | 45,025 | 42,584 |
+| H5 | 65 | 75 |
+| Model calls agent có usage | 56 | 70 |
+| Token agent | 61,213 | 125,442 |
+| Token judge | 45,025 | 52,220 |
 | Chi phí agent USD (API trả về) | 0.0130554 | Không có trường cost |
 | Chi phí judge USD (API trả về) | 0.00814065 | Không có trường cost |
 
-Điểm tổng giảm 0.23. H1/H6 cải thiện nhưng H5=0 do validation làm mất hiệu quả.
+Điểm tổng cao hơn baseline 3.86 điểm; cao hơn lần 78.41 trước sửa timestamp 4.09 điểm.
+H5 tăng từ 0 lên 75 và hoàn thành bình thường. A5/H1/H6/H7 cũng cao hơn baseline,
+nhưng không thể quy toàn bộ chênh lệch cho code vì khác provider/judge và có dao động LLM.
 Chi phí/token tăng do các lượt sửa và context được gửi lại.
 Không có cost trong response không có nghĩa API miễn phí.
 Khác provider/judge và chỉ một lần chạy nên chưa kết luận tác động nhân quả.
 
-eval_after.json 78.41 thuộc code TRƯỚC bản sửa timestamp cuối.
-Đã thử chạy eval cuối nhưng tiến trình công cụ không có OPENAI_API_KEY nên chưa
-chạy được; không ghi đè kết quả hợp lệ hoặc tự sửa điểm. Cần chạy lại bằng terminal
-đã cấu hình key và cập nhật báo cáo trước khi coi đây là eval của code cuối.
+eval_after.json hiện là lần chạy cuối sau sửa timestamp do người học chạy trong
+PowerShell đã cấu hình OpenAI. Cả 22 case được chấm, không sửa điểm hay ghép case.
 
 ## 5. Giới hạn và checklist bàn giao
 
@@ -103,7 +106,7 @@ chạy được; không ghi đè kết quả hợp lệ hoặc tự sửa điể
   bỏ sót cách diễn đạt, cần đối chiếu trace.
 - Judge có thể nhận xét mâu thuẫn; không sửa expected hay ghép điểm từ nhiều run.
 - Cặp eval hiện khác provider/judge, chưa đạt điều kiện cùng config của CP6.
-- Cần chạy eval cuối sau bản sửa timestamp; cập nhật bảng bằng số liệu thực tế.
+- Đã chạy eval cuối sau sửa timestamp và cập nhật bảng bằng số liệu thực tế.
 - CP7 cần demo trace nhiều bước và một lỗi (H5 vòng lặp validation là ví dụ),
   kiểm tra tên repo/public, push file nộp và nộp link LMS. Việc push không thay
   cho nộp LMS; chưa xác nhận đã nộp LMS.
