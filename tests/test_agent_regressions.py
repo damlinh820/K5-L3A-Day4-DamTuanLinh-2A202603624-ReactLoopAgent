@@ -19,6 +19,26 @@ class MemoryTools:
 
 
 class AgentRegressions(unittest.TestCase):
+    def test_scope_search_before_reading_unrelated_details(self):
+        class SearchTools(MemoryTools):
+            def execute(self, name, args):
+                result = super().execute(name, args)
+                if name == 'get_status' and not args.get('component'):
+                    result['incidents'] = [{'id': 'unrelated', 'name': 'Other product'}]
+                return result
+
+        fake = FakeProvider([
+            tool_call('a', 'get_status', '{"provider":"github"}'),
+            final('GitHub: chưa rõ phạm vi.'),
+            tool_call('b', 'get_status', '{"provider":"github","component":"Target Product"}'),
+            final('GitHub: chưa tìm thấy kết quả trong dữ liệu giới hạn.'),
+        ])
+        result = run_agent('Tìm Target Product: components rỗng có nghĩa không ảnh hưởng không?',
+                           fake, SearchTools())
+        self.assertEqual(result['status'], 'completed')
+        self.assertIn('component', fake.histories[2][-1]['content'])
+        self.assertFalse(any(e.get('name') == 'get_incident_details' for e in result['trace']))
+
     def test_timestamp_without_word_snapshot_is_accepted(self):
         class TimestampTools(MemoryTools):
             def execute(self, name, args):
