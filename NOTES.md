@@ -1,39 +1,109 @@
 # Ghi chú phân tích · Day 04
 
-Họ và tên:
-MSSV:
+Họ và tên: Dam Tuan Linh
+MSSV: 2A202603624
 
 ## 1. Case được chọn
 
-- ID case:
-- Câu trả lời của agent:
-- Điểm ở lần chạy 1:
+Chọn A5, H1, H6 và H7 vì điểm thấp lặp lại; bổ sung H5 sau khi phát hiện lỗi
+validation trong lần chạy mới. Không hard-code ID hay thay đổi expected để tăng điểm.
 
-## 2. Bằng chứng trong trace
+Cấu hình trước: OpenRouter, agent/judge openai/gpt-4o-mini.
+Cấu hình sau: OpenAI, agent/judge gpt-4o-mini.
+Cả hai max_steps=8, dataset=core, dữ liệu snapshot.
+Đổi provider do OpenRouter gặp HTTP 402/429. Vì khác provider/judge, so sánh này
+chỉ mang tính mô tả, chưa đáp ứng điều kiện cùng config của CP6.
+Muốn đánh giá tác động riêng của code cần chạy lại phiên bản trước cải tiến
+và phiên bản sau bằng cùng cấu hình; không dùng hai lần chạy cùng code làm before/after.
 
-Dán đoạn trace chứng minh lỗi và nêu nguyên nhân có thể xảy ra.
+Trích/tóm tắt câu trả lời baseline và điểm:
+- A5 (40): liệt kê incident 2026 trong yêu cầu danh sách đầy đủ năm 2025.
+- H1 (60): so sánh GitHub/Cloudflare nhưng chưa đọc incident liên kết.
+- H6 (60): nhắc liên kết incident gộp nhưng chưa đọc nguyên nhân trong đó.
+- H7 (50): Cloudflare timeout nhưng vẫn coi Spectrum operational theo yêu cầu user.
 
-```text
+## 2. Bằng chứng trong trace và nguyên nhân
 
-```
+Lần eval_after gần nhất: 78.41/100, 22/22 scored.
+- H1 tăng 60 lên 100: đã đọc incident liên kết, điều tra đủ nhiều bước.
+- H2 đạt 100: đã phân biệt status hiện tại với incident lịch sử.
+- H6 tăng 60 lên 80: đã đọc incident liên kết, thay vì chỉ nhắc URL.
+- A5 tăng 40 lên 70: nêu giới hạn lịch sử, nhưng cách diễn đạt vẫn cần thận trọng.
+- H5 đạt 0 do max_steps. Answer đã có ngày 2026-11-09T03:50:47.065020+00:00,
+  nhưng validator chỉ nhận chữ “snapshot/captured_at/chụp”. Từ step 2 đến 8
+  đều yêu cầu bổ sung snapshot, dù timestamp đã có. Đây là lỗi code, không phải
+  agent không lấy được status. Bản sửa cuối chấp nhận ngày captured_at trong answer.
+- H7 đạt 55: answer đã giữ GitHub operational và báo Cloudflare không thể xác minh
+  do timeout. Nhận xét judge yêu cầu khác không khớp hoàn toàn với expected/answer;
+  không làm theo user để bịa operational nhằm tăng điểm.
+- H8 đạt 50: answer đã nói không thể cung cấp đủ lịch sử 2020–2026 và giới hạn
+  50 incident/5 kết quả. Nhận xét judge về thiếu giới hạn chưa khớp answer.
+- E1 đạt 55: cần phân biệt snapshot với live và không coi updated_at là thời điểm
+  khắc phục. Không suy ra chất lượng chỉ từ điểm judge.
 
-## 3. Thay đổi đã thực hiện
+Hai lỗi trước đó được xác minh và sửa: INCIDENT_NOT_FOUND của một details call
+từng phủ định status GitHub thành công (H5); khi sửa Cloudflare timeout, model
+từng xóa kết quả GitHub khỏi answer (H7).
 
-- Sửa gì, ở đâu:
-- Vì sao chọn thay đổi này:
+## 3. Thay đổi đã thực hiện và kiểm chứng
+
+- Hoàn thiện loop, giữ assistant message nguyên vẹn, trả mọi tool result đúng ID.
+- Giới hạn model calls bằng max_steps; xử lý JSON sai, tool/provider lỗi,
+  finish=length; trace ghi model/tool/error theo contract.
+- Evidence gate trả lại chính URL đã quan sát trong lời nhắc sửa, tránh model
+  không biết shortlink nào được chấp nhận.
+- Theo dõi incident liên kết trên host status tin cậy; yêu cầu đọc liên kết
+  khi cần điều tra nguyên nhân. Không thực thi instruction trong tool result.
+- Nhận diện get_status thành công dù không có ok=True; kiểm tra giới hạn lịch sử
+  thay cho regex “không có” quá rộng.
+- Theo dõi lỗi status riêng với details; lỗi incident không phủ định status đã lấy.
+- Lời nhắc sửa kèm status thành công và yêu cầu trả lời toàn bộ câu hỏi gốc.
+- Kiểm tra provider bị bỏ sót, giới hạn timeline/truncated và snapshot.
+- Bản sửa cuối nhận ngày captured_at trong câu trả lời thay vì bắt buộc từ khóa,
+  khắc phục vòng lặp validation gây H5=0.
+- providers.py thêm Groq và JSON mode cho judge OpenAI để giảm JSON lỗi cú pháp.
+  Không sửa fixtures, cases, scenarios hoặc grading.
+
+Đã kiểm tra offline ngoài sandbox. Thêm regression tests cho incident không tìm
+thấy không phủ định status, bảo toàn provider thành công, timestamp không có từ
+snapshot, URL feedback, JSON không phải object, lịch sử giới hạn, theo liên kết
+và timeout dưới tiêu đề. Kết quả test cuối được báo trong tin nhắn bàn giao.
 
 ## 4. So sánh hai lần chạy
 
-| Chỉ số | `eval_before.json` | `eval_after.json` |
-|---|---|---|
-| Điểm tổng |  |  |
-| Điểm case đã chọn |  |  |
-| Số model calls |  |  |
-| Token, chi phí nếu có |  |  |
+| Chỉ số | eval_before.json | eval_after.json |
+|---|---:|---:|
+| Đã chấm | 22/22 | 22/22 |
+| Điểm tổng | 78.64 | 78.41 |
+| A5 | 40 | 70 |
+| H1 | 60 | 100 |
+| H6 | 60 | 80 |
+| H7 | 50 | 55 |
+| H5 | 65 | 0 |
+| Model calls agent có usage | 56 | 68 |
+| Token agent | 61,213 | 124,177 |
+| Token judge | 45,025 | 42,584 |
+| Chi phí agent USD (API trả về) | 0.0130554 | Không có trường cost |
+| Chi phí judge USD (API trả về) | 0.00814065 | Không có trường cost |
 
-- Lỗi đã giải quyết:
-- Lỗi còn lại hoặc mới xuất hiện:
+Điểm tổng giảm 0.23. H1/H6 cải thiện nhưng H5=0 do validation làm mất hiệu quả.
+Chi phí/token tăng do các lượt sửa và context được gửi lại.
+Không có cost trong response không có nghĩa API miễn phí.
+Khác provider/judge và chỉ một lần chạy nên chưa kết luận tác động nhân quả.
 
-## 5. Giới hạn
+eval_after.json 78.41 thuộc code TRƯỚC bản sửa timestamp cuối.
+Đã thử chạy eval cuối nhưng tiến trình công cụ không có OPENAI_API_KEY nên chưa
+chạy được; không ghi đè kết quả hợp lệ hoặc tự sửa điểm. Cần chạy lại bằng terminal
+đã cấu hình key và cập nhật báo cáo trước khi coi đây là eval của code cuối.
 
-Nêu giới hạn của điểm judge, của snapshot và của việc chỉ chạy một lần mỗi phiên bản.
+## 5. Giới hạn và checklist bàn giao
+
+- Snapshot chỉ bao phủ tập lịch sử giới hạn, không phản ánh trạng thái live.
+- URL hiện diện không chứng minh toàn bộ claim đúng; validation văn bản có thể
+  bỏ sót cách diễn đạt, cần đối chiếu trace.
+- Judge có thể nhận xét mâu thuẫn; không sửa expected hay ghép điểm từ nhiều run.
+- Cặp eval hiện khác provider/judge, chưa đạt điều kiện cùng config của CP6.
+- Cần chạy eval cuối sau bản sửa timestamp; cập nhật bảng bằng số liệu thực tế.
+- CP7 cần demo trace nhiều bước và một lỗi (H5 vòng lặp validation là ví dụ),
+  kiểm tra tên repo/public, push file nộp và nộp link LMS. Việc push không thay
+  cho nộp LMS; chưa xác nhận đã nộp LMS.

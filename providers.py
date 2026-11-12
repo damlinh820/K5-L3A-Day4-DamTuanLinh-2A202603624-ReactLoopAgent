@@ -8,6 +8,7 @@ CONFIG = {
     'openai': ('OPENAI_API_KEY', 'https://api.openai.com/v1/chat/completions'),
     'gemini': ('GEMINI_API_KEY', 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'),
     'openrouter': ('OPENROUTER_API_KEY', 'https://openrouter.ai/api/v1/chat/completions'),
+    'groq': ('GROQ_API_KEY', 'https://api.groq.com/openai/v1/chat/completions'),
     'anthropic': ('ANTHROPIC_API_KEY', 'https://api.anthropic.com/v1/messages'),
 }
 
@@ -47,6 +48,13 @@ class Provider:
         payload = {'model': self.model, 'messages': messages}
         if schemas:
             payload['tools'] = schemas
+        elif self.name == 'openai' and any(
+            m.get('role') == 'system'
+            and 'Chỉ trả một JSON object hợp lệ' in (m.get('content') or '')
+            for m in messages
+        ):
+            # Judge yêu cầu JSON; ràng buộc format ở API để tránh JSON sai cú pháp.
+            payload['response_format'] = {'type': 'json_object'}
         data = post_json(self.url, {'Authorization': f'Bearer {self.key}'}, payload)
         choice = data['choices'][0]
         message = choice['message']
